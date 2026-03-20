@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sentinel Pipeline | Live Demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Reset & Tokens ──────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #070b14;
+      --surface:  #0d1424;
+      --card:     #111c2e;
+      --border:   #1e2f4a;
+      --accent:   #00c6ff;
+      --accent2:  #7b5ea7;
+      --success:  #00e5a0;
+      --danger:   #ff5370;
+      --warn:     #ffb347;
+      --text:     #e2eaf5;
+      --muted:    #6b7fa3;
+      --glow:     0 0 28px rgba(0,198,255,.25);
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Animated background grid ────────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(0,198,255,.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,198,255,.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Layout ──────────────────────────────────────────────────── */
+    .page { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem 5rem; }
+
+    /* ── Header ──────────────────────────────────────────────────── */
+    header { text-align: center; padding: 3rem 0 2.5rem; }
+    .badge {
+      display: inline-flex; align-items: center; gap: .45rem;
+      background: rgba(0,198,255,.1); border: 1px solid rgba(0,198,255,.3);
+      color: var(--accent); border-radius: 2rem;
+      font-size: .72rem; font-weight: 600; letter-spacing: .08em;
+      padding: .35rem .85rem; margin-bottom: 1.2rem; text-transform: uppercase;
+    }
+    .badge::before { content:'●'; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    h1 {
+      font-size: clamp(2rem, 5vw, 3.2rem);
+      font-weight: 900; line-height: 1.1;
+      background: linear-gradient(135deg, #fff 30%, var(--accent));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      margin-bottom: .6rem;
+    }
+    .subtitle {
+      color: var(--muted); font-size: 1.05rem; max-width: 560px; margin: 0 auto 2rem;
+      line-height: 1.6;
+    }
+
+    /* ── Cards ───────────────────────────────────────────────────── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.8rem 2rem;
+      margin-bottom: 1.5rem;
+      transition: border-color .3s;
+    }
+    .card.glowing { border-color: var(--accent); box-shadow: var(--glow); }
+    .card-title {
+      font-size: .72rem; font-weight: 700; letter-spacing: .12em;
+      text-transform: uppercase; color: var(--accent); margin-bottom: 1.2rem;
+      display: flex; align-items: center; gap: .5rem;
+    }
+    .card-title .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--accent); flex-shrink: 0;
+    }
+
+    /* ── Input payload table ──────────────────────────────────────── */
+    .payload-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: .7rem;
+    }
+    @media(max-width:600px){ .payload-grid { grid-template-columns: 1fr; } }
+
+    .payload-item {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: .85rem 1.1rem;
+      display: flex; flex-direction: column; gap: .2rem;
+    }
+    .payload-key {
+      font-size: .68rem; font-weight: 600; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--muted);
+    }
+    .payload-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .92rem; color: var(--text); word-break: break-all;
+    }
+    .payload-val.danger { color: var(--danger); font-weight: 600; }
+    .payload-val.warn   { color: var(--warn);   font-weight: 600; }
+
+    /* ── Architecture diagram ─────────────────────────────────────── */
+    .arch {
+      display: flex; align-items: center; justify-content: center;
+      gap: 0; flex-wrap: wrap; padding: .5rem 0 1.2rem;
+    }
+    .arch-node {
+      display: flex; flex-direction: column; align-items: center;
+      background: var(--surface); border: 2px solid var(--border);
+      border-radius: 14px; padding: 1rem 1.4rem;
+      min-width: 150px; text-align: center;
+      transition: border-color .3s, box-shadow .3s;
+      position: relative;
+    }
+    .arch-node.active  { border-color: var(--accent); box-shadow: var(--glow); }
+    .arch-node.done    { border-color: var(--success); box-shadow: 0 0 22px rgba(0,229,160,.2); }
+    .arch-node .node-icon { font-size: 1.8rem; margin-bottom: .4rem; }
+    .arch-node .node-label { font-size: .68rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+    .arch-node .node-name  { font-size: .95rem; font-weight: 700; color: var(--text); margin-top: .2rem; }
+    .arch-node .node-status { font-size: .72rem; color: var(--muted); margin-top: .3rem; font-family: 'JetBrains Mono', monospace; }
+    .arch-node.active  .node-status { color: var(--accent); }
+    .arch-node.done    .node-status { color: var(--success); }
+
+    .arch-arrow {
+      display: flex; flex-direction: column; align-items: center;
+      padding: 0 .6rem; color: var(--border); font-size: 1.5rem;
+      transition: color .4s;
+    }
+    .arch-arrow.active { color: var(--accent); }
+    .arch-arrow .arrow-label { font-size: .62rem; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin-top: .2rem; }
+
+    .start-end {
+      background: rgba(0,198,255,.08); border: 1px dashed var(--border);
+      border-radius: 50px; padding: .4rem 1rem;
+      font-size: .7rem; font-weight: 700; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--muted);
+    }
+
+    /* ── Run button ───────────────────────────────────────────────── */
+    .run-btn {
+      display: flex; align-items: center; gap: .7rem;
+      background: linear-gradient(135deg, #0077b6, var(--accent));
+      color: #fff; border: none; border-radius: 12px;
+      padding: 1rem 2.4rem; font-size: 1.05rem; font-weight: 700;
+      cursor: pointer; margin: 0 auto 1.8rem; transition: transform .2s, box-shadow .2s;
+      box-shadow: 0 4px 24px rgba(0,198,255,.35);
+    }
+    .run-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,198,255,.5); }
+    .run-btn:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+    .run-btn .btn-icon { font-size: 1.3rem; }
+
+    /* ── Live log ─────────────────────────────────────────────────── */
+    #log-container { display: none; }
+    .log-box {
+      background: #050a12; border: 1px solid var(--border);
+      border-radius: 10px; padding: 1.2rem 1.4rem;
+      font-family: 'JetBrains Mono', monospace; font-size: .82rem;
+      line-height: 1.8; max-height: 280px; overflow-y: auto;
+      color: var(--muted);
+    }
+    .log-line { opacity: 0; transform: translateX(-6px); transition: opacity .3s, transform .3s; }
+    .log-line.visible { opacity: 1; transform: none; }
+    .log-line.ok   { color: var(--success); }
+    .log-line.warn { color: var(--warn); }
+    .log-line.err  { color: var(--danger); }
+    .log-line.info { color: var(--accent); }
+
+    /* ── Model waterfall ──────────────────────────────────────────── */
+    #models-container { display: none; }
+    .model-list { display: flex; flex-direction: column; gap: .55rem; }
+    .model-row {
+      display: flex; align-items: center; gap: .8rem;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 9px; padding: .7rem 1rem; font-size: .82rem;
+      transition: border-color .3s;
+    }
+    .model-row.trying   { border-color: var(--accent); }
+    .model-row.success  { border-color: var(--success); background: rgba(0,229,160,.05); }
+    .model-row.rate_limited { border-color: var(--warn); opacity: .65; }
+    .model-icon { font-size: 1.1rem; flex-shrink: 0; }
+    .model-name { font-family: 'JetBrains Mono', monospace; color: var(--text); flex: 1; }
+    .model-badge {
+      font-size: .68rem; font-weight: 700; letter-spacing: .07em;
+      text-transform: uppercase; padding: .2rem .55rem; border-radius: 5px;
+    }
+    .model-badge.trying      { background: rgba(0,198,255,.15); color: var(--accent); }
+    .model-badge.success     { background: rgba(0,229,160,.15); color: var(--success); }
+    .model-badge.rate_limited { background: rgba(255,179,71,.12); color: var(--warn); }
+
+    /* ── Result card ──────────────────────────────────────────────── */
+    #result-container { display: none; }
+    .result-json {
+      background: #040911; border: 1px solid var(--success);
+      border-radius: 12px; padding: 1.4rem 1.6rem;
+      font-family: 'JetBrains Mono', monospace; font-size: .9rem;
+      line-height: 1.8; color: #c9e8d0;
+      white-space: pre; box-shadow: 0 0 24px rgba(0,229,160,.1);
+    }
+    .json-key   { color: #7dd3fc; }
+    .json-str   { color: #a7f3b0; }
+    .json-bool  { color: #fda4af; font-weight: 700; }
+    .json-num   { color: #fde68a; }
+
+    /* ── Validation badges ────────────────────────────────────────── */
+    .validation-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: .8rem; margin-top: 1.2rem;
+    }
+    .val-item {
+      background: var(--surface); border-radius: 10px;
+      border: 1px solid var(--border); padding: .9rem 1.1rem;
+    }
+    .val-item .val-label {
+      font-size: .67rem; font-weight: 700; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--muted); margin-bottom: .35rem;
+    }
+    .val-item .val-value { font-size: 1rem; font-weight: 700; }
+    .val-item .val-value.pass { color: var(--success); }
+    .val-item .val-value.fail { color: var(--danger); }
+    .val-item .val-sub { font-size: .72rem; color: var(--muted); margin-top: .2rem; }
+
+    /* ── How it works explainer ───────────────────────────────────── */
+    .explainers { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px,1fr)); gap: 1rem; }
+    .explain-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 1.4rem 1.5rem;
+    }
+    .explain-num {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: linear-gradient(135deg, #0077b6, var(--accent));
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 900; font-size: .85rem; margin-bottom: .9rem;
+      box-shadow: 0 0 14px rgba(0,198,255,.3);
+    }
+    .explain-card h3 { font-size: .95rem; font-weight: 700; margin-bottom: .5rem; }
+    .explain-card p  { font-size: .83rem; color: var(--muted); line-height: 1.65; }
+    .explain-card code {
+      font-family: 'JetBrains Mono', monospace; font-size: .78rem;
+      background: rgba(0,198,255,.08); color: var(--accent);
+      padding: .15rem .4rem; border-radius: 4px;
+    }
+
+    /* ── Loading spinner ──────────────────────────────────────────── */
+    .spinner {
+      display: inline-block; width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,.3); border-top-color: #fff;
+      border-radius: 50%; animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Scrollbar ────────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: var(--surface); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+    /* ── Section divider ──────────────────────────────────────────── */
+    .section-title {
+      font-size: .7rem; font-weight: 700; letter-spacing: .14em;
+      text-transform: uppercase; color: var(--muted);
+      margin: 2.5rem 0 1rem; display: flex; align-items: center; gap: .6rem;
+    }
+    .section-title::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+
+    /* ── Confetti burst ───────────────────────────────────────────── */
+    .confetti-piece {
+      position: fixed; width: 8px; height: 8px; border-radius: 2px;
+      pointer-events: none; animation: confettiFall 2s ease-in forwards;
+    }
+    @keyframes confettiFall {
+      0%   { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+      100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ── Header ── -->
+  <header>
+    <div class="badge">Live Technical Demo</div>
+    <h1>Mini Sentinel Pipeline</h1>
+    <p class="subtitle">
+      A production-style AI agent that ingests a cybersecurity scan, evaluates severity with an LLM,
+      and <strong>enforces a strict JSON schema via Pydantic</strong> — eliminating AI hallucinations.
+    </p>
+  </header>
+
+  <!-- ── Section: Input ── -->
+  <div class="section-title">① Mock Input — Shodan API Response</div>
+  <div class="card">
+    <div class="card-title"><span class="dot"></span> Simulated Vulnerability Scan Payload</div>
+    <div class="payload-grid">
+      <div class="payload-item">
+        <span class="payload-key">Target Domain</span>
+        <span class="payload-val">{{ payload.target_domain }}</span>
+      </div>
+      <div class="payload-item">
+        <span class="payload-key">Scanned Port</span>
+        <span class="payload-val warn">{{ payload.scanned_port }} ({{ payload.service }})</span>
+      </div>
+      <div class="payload-item">
+        <span class="payload-key">Vulnerability Detected</span>
+        <span class="payload-val danger">{{ payload.vulnerability_detected }}</span>
+      </div>
+      <div class="payload-item">
+        <span class="payload-key">CVSS Score</span>
+        <span class="payload-val danger">{{ payload.cvss_score }} / 10 — CRITICAL</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Section: Architecture ── -->
+  <div class="section-title">② LangGraph Architecture — 2-Node Pipeline</div>
+  <div class="card" id="arch-card">
+    <div class="card-title"><span class="dot"></span> Agentic Workflow Flow</div>
+    <div class="arch">
+      <div class="start-end">START</div>
+      <div class="arch-arrow" id="arr0">
+        <span>→</span>
+        <span class="arrow-label">state</span>
+      </div>
+      <div class="arch-node" id="node1">
+        <div class="node-icon">🗄️</div>
+        <div class="node-label">Node 1</div>
+        <div class="node-name">Data Ingestion</div>
+        <div class="node-status" id="node1-status">idle</div>
+      </div>
+      <div class="arch-arrow" id="arr1">
+        <span>→</span>
+        <span class="arrow-label">AgentState</span>
+      </div>
+      <div class="arch-node" id="node2">
+        <div class="node-icon">🧠</div>
+        <div class="node-label">Node 2</div>
+        <div class="node-name">Auditor LLM</div>
+        <div class="node-status" id="node2-status">idle</div>
+      </div>
+      <div class="arch-arrow" id="arr2">
+        <span>→</span>
+        <span class="arrow-label">AlertOutput</span>
+      </div>
+      <div class="start-end">END</div>
+    </div>
+  </div>
+
+  <!-- ── Run Button ── -->
+  <div style="text-align:center">
+    <button class="run-btn" id="runBtn" onclick="runPipeline()">
+      <span class="btn-icon">🚀</span>
+      Run Sentinel Pipeline
+    </button>
+  </div>
+
+  <!-- ── Live Log ── -->
+  <div id="log-container">
+    <div class="section-title">③ Live Execution Log</div>
+    <div class="card">
+      <div class="card-title"><span class="dot"></span> Pipeline Console</div>
+      <div class="log-box" id="log-box"></div>
+    </div>
+  </div>
+
+  <!-- ── Model Waterfall ── -->
+  <div id="models-container">
+    <div class="section-title">↳ OpenRouter Free Model Waterfall</div>
+    <div class="card">
+      <div class="card-title"><span class="dot"></span> Auto-selecting Best Available Free Model</div>
+      <div class="model-list" id="model-list"></div>
+    </div>
+  </div>
+
+  <!-- ── Result ── -->
+  <div id="result-container">
+    <div class="section-title">④ Pydantic-Enforced Output — CEO Alert</div>
+    <div class="card glowing">
+      <div class="card-title"><span class="dot"></span> Structured JSON Response (schema-validated)</div>
+      <div class="result-json" id="result-json"></div>
+      <div class="validation-grid" id="validation-grid"></div>
+    </div>
+  </div>
+
+  <!-- ── Explainer (always visible) ── -->
+  <div class="section-title">⑤ How It Works — Technical Breakdown</div>
+  <div class="explainers">
+    <div class="explain-card">
+      <div class="explain-num">1</div>
+      <h3>LangGraph State Machine</h3>
+      <p>Two nodes connected in a directed acyclic graph using
+        <code>StateGraph(AgentState)</code>. The <code>AgentState</code> TypedDict object
+        flows through both nodes, accumulating data at each step.</p>
+    </div>
+    <div class="explain-card">
+      <div class="explain-num">2</div>
+      <h3>Pydantic Output Guardrail</h3>
+      <p><code>PydanticOutputParser(AlertOutput)</code> is injected into the LangChain chain
+        as <code>prompt | llm | parser</code>. If the LLM outputs anything outside the schema,
+        the library raises <code>OutputParserException</code> — no raw text ever escapes.</p>
+    </div>
+    <div class="explain-card">
+      <div class="explain-num">3</div>
+      <h3>Multi-Model Waterfall</h3>
+      <p>The pipeline maintains a priority list of 5 free OpenRouter models. If the top model
+        is rate-limited (HTTP 429), it automatically skips to the next — guaranteeing a result
+        without paid API credits.</p>
+    </div>
+    <div class="explain-card">
+      <div class="explain-num">4</div>
+      <h3>CVSS Threshold Rule</h3>
+      <p>The prompt explicitly instructs the LLM: <em>"Set <code>is_critical = true</code> if
+        CVSS score &gt; 8.0"</em>. With a score of <strong>9.8</strong>, the expected output
+        is always <code>true</code>, validated post-response.</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ── State ── */
+const modelState = {};
+
+/* ── SSE listener ── */
+function runPipeline() {
+  const btn  = document.getElementById('runBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Running…';
+
+  // reset UI
+  resetUI();
+  document.getElementById('log-container').style.display = 'block';
+  document.getElementById('models-container').style.display = 'none';
+  document.getElementById('result-container').style.display = 'none';
+
+  const src = new EventSource('/run');
+
+  src.addEventListener('start', (e) => {
+    const d = JSON.parse(e.data);
+    addLog('info', '▶  ' + d.message);
+  });
+
+  src.addEventListener('node1_start', (e) => {
+    const d = JSON.parse(e.data);
+    setNode('node1', 'active', 'processing…');
+    setArrow('arr0', true);
+    addLog('info', '[Node 1]  ' + d.message);
+  });
+
+  src.addEventListener('node1_data', (e) => {
+    addLog('ok', '  payload loaded: ' + Object.keys(JSON.parse(e.data).payload).join(', '));
+  });
+
+  src.addEventListener('node1_done', (e) => {
+    const d = JSON.parse(e.data);
+    setNode('node1', 'done', '✓ complete');
+    setArrow('arr1', true);
+    addLog('ok', '  ' + d.message);
+  });
+
+  src.addEventListener('node2_start', (e) => {
+    const d = JSON.parse(e.data);
+    setNode('node2', 'active', 'processing…');
+    addLog('info', '[Node 2]  ' + d.message);
+  });
+
+  src.addEventListener('node2_calling', (e) => {
+    const d = JSON.parse(e.data);
+    addLog('info', '[Node 2]  ' + d.message);
+    document.getElementById('models-container').style.display = 'block';
+  });
+
+  src.addEventListener('model_try', (e) => {
+    const d = JSON.parse(e.data);
+    updateModel(d.model, d.status);
+    if (d.status === 'trying')      addLog('info', '  ↳ trying  ' + d.model);
+    if (d.status === 'rate_limited') addLog('warn', '  ↳ skipped ' + d.model + ' (rate-limited)');
+    if (d.status === 'success')      addLog('ok',   '  ↳ success ' + d.model + ' ✓');
+  });
+
+  src.addEventListener('result', (e) => {
+    const d = JSON.parse(e.data);
+    setNode('node2', 'done', '✓ complete');
+    setArrow('arr2', true);
+    showResult(d.alert, d.validation);
+    confetti();
+    addLog('ok', '✅  CEO Alert generated and Pydantic-validated successfully!');
+  });
+
+  src.addEventListener('error', (e) => {
+    const d = JSON.parse(e.data);
+    addLog('err', '✖  ' + d.message);
+    btn.disabled = false;
+    btn.innerHTML = '<span class="btn-icon">🔄</span> Retry Pipeline';
+    src.close();
+  });
+
+  src.addEventListener('done', () => {
+    btn.disabled = false;
+    btn.innerHTML = '<span class="btn-icon">🔄</span> Run Again';
+    src.close();
+  });
+
+  src.onerror = () => {
+    addLog('err', '✖  Connection lost. Please retry.');
+    btn.disabled = false;
+    btn.innerHTML = '<span class="btn-icon">🔄</span> Retry Pipeline';
+    src.close();
+  };
+}
+
+/* ── UI helpers ── */
+function resetUI() {
+  document.getElementById('log-box').innerHTML = '';
+  document.getElementById('model-list').innerHTML = '';
+  document.getElementById('result-json').innerHTML = '';
+  document.getElementById('validation-grid').innerHTML = '';
+  ['node1','node2'].forEach(id => setNode(id, '', 'idle'));
+  ['arr0','arr1','arr2'].forEach(id => setArrow(id, false));
+  Object.keys(modelState).forEach(k => delete modelState[k]);
+}
+
+function addLog(cls, msg) {
+  const box  = document.getElementById('log-box');
+  const line = document.createElement('div');
+  line.className = 'log-line ' + cls;
+  line.textContent = msg;
+  box.appendChild(line);
+  requestAnimationFrame(() => line.classList.add('visible'));
+  box.scrollTop = box.scrollHeight;
+}
+
+function setNode(id, state, statusText) {
+  const el = document.getElementById(id);
+  el.classList.remove('active','done');
+  if (state) el.classList.add(state);
+  document.getElementById(id + '-status').textContent = statusText;
+}
+
+function setArrow(id, active) {
+  const el = document.getElementById(id);
+  if (active) el.classList.add('active');
+  else el.classList.remove('active');
+}
+
+function updateModel(model, status) {
+  const list = document.getElementById('model-list');
+  let row = document.getElementById('m-' + model.replace(/[^a-z0-9]/gi,'_'));
+  if (!row) {
+    row = document.createElement('div');
+    row.className = 'model-row';
+    row.id = 'm-' + model.replace(/[^a-z0-9]/gi,'_');
+    row.innerHTML = `<span class="model-icon">🤖</span>
+      <span class="model-name">${model}</span>
+      <span class="model-badge" id="mb-${model.replace(/[^a-z0-9]/gi,'_')}"></span>`;
+    list.appendChild(row);
+  }
+  row.className = 'model-row ' + status;
+  const badge = row.querySelector('.model-badge');
+  badge.className = 'model-badge ' + status;
+  const labels = { trying:'Testing…', success:'✓ Used', rate_limited:'Rate-limited' };
+  badge.textContent = labels[status] || status;
+}
+
+function showResult(alert, v) {
+  document.getElementById('result-container').style.display = 'block';
+  // Syntax-highlighted JSON
+  const pretty = JSON.stringify(alert, null, 2)
+    .replace(/"([^"]+)":/g, '<span class="json-key">"$1"</span>:')
+    .replace(/: "([^"]+)"/g, ': <span class="json-str">"$1"</span>')
+    .replace(/: (true|false)/g, ': <span class="json-bool">$1</span>')
+    .replace(/: (\d[\d.]*)/g, ': <span class="json-num">$1</span>');
+  document.getElementById('result-json').innerHTML = pretty;
+
+  // Validation grid
+  const grid = document.getElementById('validation-grid');
+  const items = [
+    {
+      label: 'is_critical Flag',
+      value: alert.is_critical ? '✓ TRUE' : '✗ FALSE',
+      ok: v.is_critical_correct,
+      sub: `CVSS ${v.cvss} > 8.0 threshold`
+    },
+    {
+      label: 'Word Count',
+      value: v.word_count + ' words',
+      ok: v.word_count_ok,
+      sub: `Limit: ≤ 15 words`
+    },
+    {
+      label: 'Pydantic Enforced',
+      value: '✓ Validated',
+      ok: true,
+      sub: 'Schema: AlertOutput model'
+    },
+    {
+      label: 'Domain Extracted',
+      value: alert.domain,
+      ok: true,
+      sub: 'From raw scan payload'
+    }
+  ];
+  grid.innerHTML = items.map(it => `
+    <div class="val-item">
+      <div class="val-label">${it.label}</div>
+      <div class="val-value ${it.ok ? 'pass' : 'fail'}">${it.value}</div>
+      <div class="val-sub">${it.sub}</div>
+    </div>
+  `).join('');
+
+  // Scroll into view
+  document.getElementById('result-container').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/* ── Confetti ── */
+function confetti() {
+  const colors = ['#00c6ff','#00e5a0','#7b5ea7','#ffb347','#fff'];
+  for (let i = 0; i < 60; i++) {
+    const el = document.createElement('div');
+    el.className = 'confetti-piece';
+    el.style.cssText = `
+      left:${Math.random()*100}vw;
+      top:${Math.random()*30 - 20}px;
+      background:${colors[Math.floor(Math.random()*colors.length)]};
+      animation-delay:${Math.random()*1}s;
+      animation-duration:${1.5 + Math.random()*1.5}s;
+      transform:rotate(${Math.random()*360}deg);
+      border-radius:${Math.random()>.5?'50%':'2px'};
+    `;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 3500);
+  }
+}
+</script>
+</body>
+</html>
